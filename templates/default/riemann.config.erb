@@ -1,0 +1,41 @@
+; -*- mode: clojure; -*-
+; vim: filetype=clojure
+
+(logging/init :file "<%= node[:riemann][:log_file] %>")
+
+; Listen on the local interface over TCP (5555), UDP (5555), and websockets
+; (5556)
+(let [host "<%= node[:riemann][:host] %>"]
+  (tcp-server :host host :port <%= node[:riemann][:port][:tcp] %>)
+  (udp-server :host host :port <%= node[:riemann][:port][:udp] %>)
+  (ws-server  :host host :port <%= node[:riemann][:port][:ws] %>))
+
+; We are our own graphite server
+(def graph (
+            graphite {:host "localhost"})
+  )
+; graph EVERYTHING!!!
+(streams graph)
+
+; Expire old events from the index every <%= node[:riemann][:expiry_interval_seconds] %> seconds
+(periodically-expire <%= node[:riemann][:expiry_interval_seconds] %>)
+
+; Keep events in the index for <%= node[:riemann][:index_ttl] %> seconds by default.
+(let [index (default :ttl <%= node[:riemann][:index_ttl] %> (update-index (index)))]
+
+  ; Inbound events will be passed to these streams:
+  (streams
+
+    ; Index all events immediately.
+    index
+
+    ; Calculate an overall rate of events.
+    (with {:metric 1 :host nil :state "ok" :service "events/sec"}
+      (rate 5 index))
+
+    ; Log expired events.
+    (expired
+      (fn [event] (info "expired" event)))
+))
+
+<%= node[:riemann][:extra_config] %>
