@@ -38,4 +38,3 @@ when "debian"
 
     end
 end
-
